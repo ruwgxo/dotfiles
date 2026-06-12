@@ -128,15 +128,6 @@ Only needed for ML model work, LLM development, or Jupyter notebooks:
 bash ~/.local/share/chezmoi/bootstrap.sh --ml
 ```
  
-Not sure if you need it?
- 
-```sh
-bash ~/.local/share/chezmoi/bootstrap.sh --help
-```
- 
-**GPU notes:**
-- Apple Silicon — Metal/MPS available, torch uses it automatically
-- Intel — CPU only, no CUDA, no MPS
 ### Set up runtimes
  
 ```sh
@@ -212,3 +203,5 @@ dotfiles/
 ---
  
 MIT License. Feedback and forks welcome.
+ 
+**Author:** Raghav Dinesh | [github.com/ruwgxo](https://github.com/ruwgxo) | [ruwgxo.com](https://ruwgxo.com)
