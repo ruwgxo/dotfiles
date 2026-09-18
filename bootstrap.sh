@@ -44,6 +44,10 @@ for arg in "$@"; do
       echo ""
       exit 0
       ;;
+    *)
+      echo "Unknown argument: $arg. Use --help for usage." >&2
+      exit 2
+      ;;
   esac
 done
 

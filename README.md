@@ -188,8 +188,6 @@ dotfiles/
 ├── requirements-ml.txt             # AI/ML Python packages — bash bootstrap.sh --ml
 ├── dot_zshrc                       # zsh config (chezmoi renames to .zshrc)
 ├── dot_zprofile.tmpl               # PATH and brew shellenv (ARM/Intel template)
-├── .chezmoitemplates/
-│   └── brew_path.tmpl              # ARM vs Intel Homebrew path
 └── dot_config/
     ├── starship.toml               # prompt config
     ├── ghostty/config              # terminal emulator config
