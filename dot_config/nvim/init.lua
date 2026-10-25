@@ -1,5 +1,5 @@
 -- init.lua
--- raghavpoonia/dotfiles
+-- ruwgxo/dotfiles
 -- LazyVim distribution: https://lazyvim.org
 
 -- ── Bootstrap LazyVim ────────────────────────────────────────────────────────
