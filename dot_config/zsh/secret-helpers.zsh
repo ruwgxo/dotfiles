@@ -1,7 +1,9 @@
 #!/usr/bin/env zsh
 # secret-helpers.zsh
 # macOS Keychain-based secret management for project env vars
-# Secrets stored as one JSON blob per project — no plaintext files ever
+# Secrets stored as one JSON blob per project, hex-encoded in the keychain item.
+# Values never appear in a process's arguments; only secret-edit writes plaintext
+# to disk, to a private temp file that is removed when the editor exits.
 #
 # Source in ~/.zshrc:
 #   source ~/.config/zsh/secret-helpers.zsh
@@ -19,16 +21,24 @@
 
 _secret_service() { echo "dotfiles-secrets-$1" }
 
-# Write JSON blob to keychain via temp file (reliable on macOS Sequoia)
+# Write JSON blob to keychain. The command goes to `security -i` on stdin, so the
+# value is never in argv (visible to ps); hex keeps it free of quoting issues.
+# -U updates in place (no delete first), and the item is read back to verify it.
 _secret_save() {
   local service="$1"
   local json="$2"
-  local tmp
-  tmp=$(mktemp /tmp/.secret-XXXXXX.json)
-  printf '%s' "$json" > "$tmp"
-  security delete-generic-password -a "$USER" -s "$service" 2>/dev/null
-  security add-generic-password -a "$USER" -s "$service" -w "$(cat $tmp)" -U 2>/dev/null
-  rm -f "$tmp"
+  if [[ "$service" == *[\"\\]* || "$USER" == *[\"\\]* ]]; then
+    echo "  ❌ project name cannot contain quotes or backslashes — not saved" >&2
+    return 1
+  fi
+  local hex
+  hex=$(printf '%s' "$json" | xxd -p | tr -d '\n')
+  printf 'add-generic-password -U -a "%s" -s "%s" -w %s\n' "$USER" "$service" "$hex" \
+    | security -i >/dev/null 2>&1
+  if [[ "$(_secret_blob "$service")" != "$json" ]]; then
+    echo "  ❌ keychain write could not be verified — check it with secret-list" >&2
+    return 1
+  fi
 }
 
 # Read from terminal — works correctly inside zsh functions
@@ -96,7 +106,7 @@ secret-set() {
     echo "  ✔  $key"
   done
 
-  _secret_save "$service" "$updated"
+  _secret_save "$service" "$updated" || return 1
   echo ""
   echo "  ✔  saved — run: secret-list $project"
 }
@@ -165,6 +175,7 @@ secret-list() {
 # ── secret-edit ───────────────────────────────────────────────────────────────
 # Edit all vars in $EDITOR — opens JSON, saves back to keychain on exit
 secret-edit() {
+  setopt localoptions localtraps
   local project="${1:?Usage: secret-edit PROJECT_NAME}"
   local service=$(_secret_service "$project")
 
@@ -172,23 +183,29 @@ secret-edit() {
   blob=$(_secret_blob "$service")
   [[ -z "$blob" ]] && blob="{}"
 
+  # Private per-user temp dir on macOS ($TMPDIR), 0600 file, removed on any exit
   local tmp
-  tmp=$(mktemp /tmp/.secret-XXXXXX.json)
+  tmp=$(mktemp "${TMPDIR:-/tmp}/.secret-XXXXXX") || return 1
+  trap "rm -f '$tmp'" EXIT INT TERM
   printf '%s' "$blob" | jq '.' > "$tmp"
 
-  ${EDITOR:-nvim} "$tmp" < /dev/tty > /dev/tty 2>&1
+  # Keep vim/nvim from writing swap, backup, undo or shada copies of the plaintext
+  local editor="${EDITOR:-nvim}"
+  local -a editor_args=()
+  [[ "${editor:t}" == (n|)vim ]] && editor_args=(-n -i NONE --cmd 'set nobackup nowritebackup noundofile')
+  "$editor" "${editor_args[@]}" "$tmp" < /dev/tty > /dev/tty 2>&1
 
   if ! jq '.' "$tmp" &>/dev/null; then
     echo "  ❌ invalid JSON — not saved"
-    rm -f "$tmp"
+    rm -f "$tmp"; trap - EXIT INT TERM
     return 1
   fi
 
   local updated
   updated=$(cat "$tmp")
-  rm -f "$tmp"
+  rm -f "$tmp"; trap - EXIT INT TERM
 
-  _secret_save "$service" "$updated"
+  _secret_save "$service" "$updated" || return 1
   echo "  ✔  updated: $project"
 }
 
